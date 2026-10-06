@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ginflix
+  labels:
+    # "baseline" blocks privileged pods, hostPath, hostNetwork...
+    # "restricted" is not possible because the two frontend images
+    # (nginx:alpine) start as root.
+    pod-security.kubernetes.io/enforce: baseline
