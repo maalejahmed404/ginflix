@@ -1,0 +1,106 @@
+# By default every pod can talk to every pod.
+# Here: deny all incoming traffic in the namespace, then open only what
+# is needed. The most important rules are the last two (MongoDB, S3 storage).
+
+# 1. nothing can enter any pod of the namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: ginflix
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+# 2. the two frontends are reachable on port 80
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontends
+  namespace: ginflix
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: ["frontend", "frontend-admin"]
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 80
+---
+# 3. backend, streamer and keycloak are reachable on port 8080
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api
+  namespace: ginflix
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: ["backend", "streamer", "keycloak"]
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 8080
+---
+# 4. MongoDB only accepts the backend, the init job and the other members
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-mongodb
+  namespace: ginflix
+spec:
+  podSelector:
+    matchLabels:
+      app: mongodb
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: backend
+        - podSelector:
+            matchLabels:
+              app: mongo-init
+        - podSelector:
+            matchLabels:
+              app: mongodb
+      ports:
+        - protocol: TCP
+          port: 27017
+---
+# 5. the S3 storage only accepts the backend, the streamer and its init job
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-seaweedfs
+  namespace: ginflix
+spec:
+  podSelector:
+    matchLabels:
+      app: seaweedfs
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: backend
+        - podSelector:
+            matchLabels:
+              app: streamer
+        - podSelector:
+            matchLabels:
+              app: s3-init
+      ports:
+        - protocol: TCP
+          port: 8333
