@@ -1,0 +1,35 @@
+{
+  "realm": "ginflix",
+  "enabled": true,
+  "sslRequired": "none",
+  "clients": [
+    {
+      "clientId": "ginflix",
+      "name": "Ginflix admin page",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://admin.ginflix.localhost:8088/*"],
+      "webOrigins": ["http://admin.ginflix.localhost:8088"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://admin.ginflix.localhost:8088/*"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "ginflix",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "admin@ginflix.localhost",
+      "firstName": "Ginflix",
+      "lastName": "Admin",
+      "credentials": [
+        { "type": "password", "value": "ginflix", "temporary": false }
+      ],
+      "realmRoles": ["default-roles-ginflix"]
+    }
+  ]
+}
