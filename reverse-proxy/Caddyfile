@@ -1,0 +1,30 @@
+# One entry point for the browser, in front of the NodePort services.
+# Caddy is on the "kind" docker network, so it can call the worker nodes
+# by their container name. A NodePort answers on every node, so both
+# workers are listed and Caddy balances between them.
+#
+# *.localhost names always point to your own machine in a browser,
+# so there is nothing to add in the hosts file.
+{
+	auto_https off
+}
+
+http://ginflix.localhost {
+	handle /api/* {
+		reverse_proxy ginflix-worker:30080 ginflix-worker2:30080
+	}
+	handle /stream* {
+		reverse_proxy ginflix-worker:30081 ginflix-worker2:30081
+	}
+	handle {
+		reverse_proxy ginflix-worker:30000 ginflix-worker2:30000
+	}
+}
+
+http://admin.ginflix.localhost {
+	reverse_proxy ginflix-worker:30001 ginflix-worker2:30001
+}
+
+http://auth.ginflix.localhost {
+	reverse_proxy ginflix-worker:30082 ginflix-worker2:30082
+}

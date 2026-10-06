@@ -1,0 +1,18 @@
+services:
+  caddy:
+    image: caddy:2.8
+    container_name: ginflix-proxy
+    restart: unless-stopped
+    # 8088 on the host because 80 is often already taken
+    ports:
+      - "8088:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    # same docker network as the kind nodes, so Caddy can reach them
+    # by name (ginflix-worker, ginflix-worker2)
+    networks:
+      - kind
+
+networks:
+  kind:
+    external: true
