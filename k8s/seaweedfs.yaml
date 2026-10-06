@@ -1,0 +1,180 @@
+# SeaweedFS = S3 compatible storage, it replaces the Garage server of the
+# school. The backend writes the videos in it, the streamer reads them.
+# "weed server -s3" runs everything (master, volume, filer, S3 API) in one
+# process, which is enough for a demo.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: seaweedfs-data
+  namespace: ginflix
+  labels:
+    app: seaweedfs
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: seaweedfs
+  namespace: ginflix
+  labels:
+    app: seaweedfs
+spec:
+  replicas: 1
+  # the volume is ReadWriteOnce: the old pod must stop before the new one starts
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: seaweedfs
+  template:
+    metadata:
+      labels:
+        app: seaweedfs
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: seaweedfs
+          image: chrislusf/seaweedfs:3.99
+          args:
+            - server
+            - -dir=/data
+            - -s3
+            - -volume.max=20
+            - -master.volumeSizeLimitMB=1024
+          ports:
+            - name: s3
+              containerPort: 8333
+          env:
+            # with these two variables SeaweedFS only accepts signed
+            # requests made with this key
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: s3-credentials
+                  key: GARAGE_ACCESS_KEY
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: s3-credentials
+                  key: GARAGE_SECRET_KEY
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: s3
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: s3
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: seaweedfs-data
+---
+# ClusterIP only: nothing outside the cluster needs to talk to the storage
+apiVersion: v1
+kind: Service
+metadata:
+  name: seaweedfs
+  namespace: ginflix
+  labels:
+    app: seaweedfs
+spec:
+  selector:
+    app: seaweedfs
+  ports:
+    - name: s3
+      port: 8333
+      targetPort: s3
+---
+# Creates the bucket with a signed S3 request (PUT /bucket).
+# 200 = created, 409 = already there, so it can run several times.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: s3-init
+  namespace: ginflix
+  labels:
+    app: s3-init
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app: s3-init
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+      containers:
+        - name: curl
+          image: curlimages/curl:8.19.0
+          env:
+            - name: ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: s3-credentials
+                  key: GARAGE_ACCESS_KEY
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: s3-credentials
+                  key: GARAGE_SECRET_KEY
+            - name: BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-config
+                  key: GARAGE_BUCKET
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+          command: ["sh", "-c"]
+          args:
+            - |
+              until curl -s -f -o /dev/null http://seaweedfs:8333/healthz; do
+                echo "waiting for seaweedfs ..."
+                sleep 3
+              done
+
+              code=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+                --aws-sigv4 "aws:amz:us-east-1:s3" --user "$ACCESS_KEY:$SECRET_KEY" \
+                "http://seaweedfs:8333/$BUCKET")
+
+              echo "PUT /$BUCKET -> $code"
+              [ "$code" = "200" ] || [ "$code" = "409" ]
