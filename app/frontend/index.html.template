@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Ginflix</title>
+  <link rel="icon" href="logo.jpg" type="image/jpeg">
+  <style>
+    body { 
+      font-family: sans-serif; 
+      margin: 0; 
+      padding: 1rem; 
+      background: #111; 
+      color: #fff; 
+    }
+
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      opacity: 1;
+    }
+
+    #loading-screen img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      opacity: 0;
+      transition: opacity 1s ease-in;
+    }
+
+    .app-header {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 2rem;
+    }
+
+    .app-logo {
+      height: 50px;
+      margin-right: 10px;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .video-card {
+      position: relative;
+      cursor: pointer;
+      transition: transform 0.2s;
+      border-radius: 4px;
+      overflow: hidden;
+      background: #222;
+    }
+
+    .video-card:hover {
+      transform: scale(1.05);
+    }
+
+    .thumbnail {
+      width: 100%;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      background: #000;
+    }
+
+    .video-title {
+      padding: 0.5rem;
+      font-size: 0.9rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.9);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+
+    .modal-content {
+      width: 90%;
+      max-width: 1000px;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .modal-title {
+      font-size: 1.5rem;
+      margin: 0;
+    }
+
+    .close-button {
+      background: transparent;
+      color: #fff;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+    }
+
+    #player {
+      width: 100%;
+      max-height: 80vh;
+      outline: none;
+      background: #000;
+    }
+
+    .thumbnail-placeholder {
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: #333;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: #666;
+    }
+
+    /* Rating styles */
+    .rating-container {
+      display: flex;
+      align-items: center;
+      padding: 0.5rem;
+      border-top: 1px solid #333;
+    }
+
+    .stars {
+      display: inline-flex;
+      margin-right: 0.5rem;
+    }
+
+    .stars .star {
+      color: #aaa;
+      font-size: 1.2rem;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    .stars .star.filled {
+      color: gold;
+    }
+
+    .stars .star:hover,
+    .stars .star:hover ~ .star.filled {
+      color: gold;
+    }
+
+    .rating-count {
+      font-size: 0.8rem;
+      color: #aaa;
+      margin-left: 0.5rem;
+    }
+
+    .modal-rating {
+      margin-top: 1rem;
+      display: flex;
+      align-items: center;
+    }
+
+    .modal-rating .stars .star {
+      font-size: 1.5rem;
+    }
+
+    .rating-label {
+      margin-right: 1rem;
+      color: #aaa;
+    }
+
+    /* Quality selection styles */
+    .video-controls {
+      display: flex;
+      align-items: center;
+      margin-top: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .quality-control {
+      position: relative;
+      margin-left: auto;
+    }
+
+    .quality-button {
+      background: rgba(0, 0, 0, 0.5);
+      color: #fff;
+      border: 1px solid #444;
+      border-radius: 4px;
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+    }
+
+    .quality-button:hover {
+      background: rgba(30, 30, 30, 0.8);
+    }
+
+    .quality-button::after {
+      content: "▼";
+      font-size: 0.7rem;
+      margin-left: 0.5rem;
+    }
+
+    .quality-dropdown {
+      position: absolute;
+      bottom: 100%;
+      right: 0;
+      background: rgba(0, 0, 0, 0.9);
+      border: 1px solid #444;
+      border-radius: 4px;
+      min-width: 120px;
+      z-index: 10;
+      display: none;
+      margin-bottom: 5px; /* Add some space between dropdown and button */
+    }
+
+    .quality-dropdown.show {
+      display: block;
+    }
+
+    .quality-option {
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .quality-option:hover {
+      background: rgba(50, 50, 50, 0.8);
+    }
+
+    .quality-option.active {
+      background: rgba(70, 70, 70, 0.8);
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading-screen">
+    <img src="landing.jpg" alt="Loading...">
+  </div>
+
+  <!-- Audio element for jingle -->
+  <audio id="jingle" src="jingle.mp3" preload="auto"></audio>
+
+  <div class="app-header">
+    <img src="logo.jpg" alt="Ginflix Logo" class="app-logo">
+    <h1>Ginflix</h1>
+  </div>
+  <div id="videoGallery" class="gallery"></div>
+
+  <div id="videoModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modalTitle"></h2>
+        <button class="close-button" id="closeModal">&times;</button>
+      </div>
+      <video id="player" controls></video>
+      <div class="video-controls">
+        <div class="quality-control">
+          <button class="quality-button" id="qualityButton">Auto</button>
+          <div class="quality-dropdown" id="qualityDropdown">
+            <div class="quality-option" data-quality="-1">Auto</div>
+            <div class="quality-option" data-quality="2">High (720p)</div>
+            <div class="quality-option" data-quality="1">Medium (540p)</div>
+            <div class="quality-option" data-quality="0">Low (360p)</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-rating">
+        <span class="rating-label">Rate this video:</span>
+        <div class="stars" id="modalStars">
+          <span class="star" data-value="1">★</span>
+          <span class="star" data-value="2">★</span>
+          <span class="star" data-value="3">★</span>
+          <span class="star" data-value="4">★</span>
+          <span class="star" data-value="5">★</span>
+        </div>
+        <span class="rating-count" id="modalRatingCount"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load HLS.js as a global script -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.9/dist/hls.min.js"></script>
+
+  <script>
+    // Handle loading screen transitions and play jingle
+    window.addEventListener('DOMContentLoaded', () => {
+      // Play the jingle when the page loads
+      const jingle = document.getElementById('jingle');
+      if (jingle) {
+        jingle.play().catch(error => {
+          console.error('Error playing jingle:', error);
+        });
+      }
+
+      // Fade in the landing image
+      const landingImage = document.querySelector('#loading-screen img');
+      if (landingImage) {
+        // Small timeout to ensure the transition is visible
+        setTimeout(() => {
+          landingImage.style.opacity = '1';
+        }, 100);
+      }
+
+      setTimeout(() => {
+        const loadingScreen = document.getElementById('loading-screen');
+        if (loadingScreen) {
+          loadingScreen.style.opacity = '0';
+          loadingScreen.style.transition = 'opacity 0.5s ease';
+          setTimeout(() => {
+            loadingScreen.style.display = 'none';
+          }, 500);
+        }
+      }, 2500); // 2.5 seconds
+    });
+
+    const BACKEND_URL = "${BACKEND_URL}";
+    const STREAM_URL = "${STREAM_URL}";
+
+    const galleryEl = document.getElementById('videoGallery');
+    const videoEl = document.getElementById('player');
+    const modalEl = document.getElementById('videoModal');
+    const modalTitleEl = document.getElementById('modalTitle');
+    const closeModalBtn = document.getElementById('closeModal');
+
+    // No hidden video element needed anymore as thumbnails are generated server-side
+
+    // Current HLS instance
+    let currentHls = null;
+    // Current quality level (-1 = auto)
+    let currentQuality = -1;
+
+    async function fetchVideos() {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/videos`);
+        if (!res.ok) {
+          throw new Error(`Failed to fetch videos: ${res.status} ${res.statusText}`);
+        }
+
+        const videos = await res.json();
+        galleryEl.innerHTML = '';
+
+        if (videos.length === 0) {
+          galleryEl.innerHTML = '<p>No videos available</p>';
+          return;
+        }
+
+        videos.forEach(video => {
+          createVideoCard(video);
+        });
+      } catch (error) {
+        console.error('Error fetching videos:', error);
+        galleryEl.innerHTML = `<p>Error loading videos: ${error.message}</p>`;
+      }
+    }
+
+    function createVideoCard(video) {
+      const card = document.createElement('div');
+      card.className = 'video-card';
+      card.dataset.title = video.title;
+      card.dataset.hlsUrl = video.hls_url;
+      card.dataset.id = video.id;
+      card.dataset.rating = video.rating || 0;
+      card.dataset.ratingCount = video.rating_count || 0;
+
+      // Create placeholder first
+      const placeholder = document.createElement('div');
+      placeholder.className = 'thumbnail-placeholder';
+      placeholder.textContent = 'Loading...';
+
+      const title = document.createElement('div');
+      title.className = 'video-title';
+      title.textContent = video.title;
+
+      // Create rating container
+      const ratingContainer = document.createElement('div');
+      ratingContainer.className = 'rating-container';
+
+      // Create stars
+      const starsContainer = document.createElement('div');
+      starsContainer.className = 'stars';
+
+      // Calculate filled stars (round to nearest half)
+      const rating = video.rating || 0;
+      const filledStars = Math.round(rating);
+
+      // Create 5 stars
+      for (let i = 1; i <= 5; i++) {
+        const star = document.createElement('span');
+        star.className = 'star' + (i <= filledStars ? ' filled' : '');
+        star.textContent = '★';
+        starsContainer.appendChild(star);
+      }
+
+      // Add rating count
+      const ratingCount = document.createElement('span');
+      ratingCount.className = 'rating-count';
+      ratingCount.textContent = video.rating_count ? `(${video.rating_count})` : '(0)';
+
+      ratingContainer.appendChild(starsContainer);
+      ratingContainer.appendChild(ratingCount);
+
+      card.appendChild(placeholder);
+      card.appendChild(title);
+      card.appendChild(ratingContainer);
+      galleryEl.appendChild(card);
+
+      // Display server-generated thumbnail
+      displayThumbnail(video.thumbnail_url, card);
+
+      // Add click event to open modal and play video
+      card.addEventListener('click', () => {
+        openVideoModal(video.title, video.hls_url, video.id, video.rating, video.rating_count);
+      });
+    }
+
+    function displayThumbnail(thumbnailUrl, cardElement) {
+      if (!thumbnailUrl) {
+        console.warn('No thumbnail URL provided');
+        return;
+      }
+
+      // Create an image element for the thumbnail
+      const thumbnail = document.createElement('img');
+      thumbnail.className = 'thumbnail';
+      thumbnail.src = `${STREAM_URL}/stream?file=${encodeURIComponent(thumbnailUrl)}`;
+      thumbnail.alt = 'Video thumbnail';
+
+      // Replace placeholder with thumbnail
+      const placeholder = cardElement.querySelector('.thumbnail-placeholder');
+      if (placeholder) {
+        cardElement.replaceChild(thumbnail, placeholder);
+      }
+    }
+
+    function openVideoModal(title, hlsPath, videoId, rating, ratingCount) {
+      modalTitleEl.textContent = title;
+      modalEl.style.display = 'flex';
+      document.body.style.overflow = 'hidden'; // Prevent scrolling
+
+      // Store video ID in the modal for rating submission
+      modalEl.dataset.videoId = videoId;
+
+      // Update rating display in modal
+      updateModalRating(rating, ratingCount);
+
+      // Set up rating stars click handlers
+      setupModalRatingStars();
+
+      playVideo(hlsPath);
+    }
+
+    function updateModalRating(rating, ratingCount) {
+      const stars = document.querySelectorAll('#modalStars .star');
+      const ratingCountEl = document.getElementById('modalRatingCount');
+
+      // Reset all stars
+      stars.forEach(star => star.classList.remove('filled'));
+
+      // Fill stars based on rating
+      const filledStars = Math.round(rating || 0);
+      stars.forEach((star, index) => {
+        if (index < filledStars) {
+          star.classList.add('filled');
+        }
+      });
+
+      // Update rating count
+      ratingCountEl.textContent = ratingCount ? `(${ratingCount} ratings)` : '(No ratings yet)';
+    }
+
+    function setupModalRatingStars() {
+      const stars = document.querySelectorAll('#modalStars .star');
+
+      stars.forEach(star => {
+        // Remove existing event listeners by cloning and replacing
+        const newStar = star.cloneNode(true);
+        star.parentNode.replaceChild(newStar, star);
+
+        // Add new event listener
+        newStar.addEventListener('click', function() {
+          const rating = parseInt(this.dataset.value);
+          const videoId = modalEl.dataset.videoId;
+
+          if (videoId && rating) {
+            submitRating(videoId, rating);
+          }
+        });
+      });
+    }
+
+    async function submitRating(videoId, rating) {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/video/rate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            video_id: videoId,
+            rating: rating
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to submit rating: ${response.status} ${response.statusText}`);
+        }
+
+        // Get the updated video details to show the new rating
+        const videoResponse = await fetch(`${BACKEND_URL}/api/videos`);
+        if (!videoResponse.ok) {
+          throw new Error(`Failed to fetch updated video: ${videoResponse.status} ${videoResponse.statusText}`);
+        }
+
+        const videos = await videoResponse.json();
+        const updatedVideo = videos.find(v => v.id === videoId);
+
+        if (updatedVideo) {
+          // Update the modal rating display
+          updateModalRating(updatedVideo.rating, updatedVideo.rating_count);
+
+          // Also update the video card in the background
+          const videoCard = document.querySelector(`.video-card[data-id="${videoId}"]`);
+          if (videoCard) {
+            const cardRatingStars = videoCard.querySelectorAll('.rating-container .star');
+            const filledStars = Math.round(updatedVideo.rating || 0);
+
+            cardRatingStars.forEach((star, index) => {
+              if (index < filledStars) {
+                star.classList.add('filled');
+              } else {
+                star.classList.remove('filled');
+              }
+            });
+
+            const cardRatingCount = videoCard.querySelector('.rating-count');
+            if (cardRatingCount) {
+              cardRatingCount.textContent = updatedVideo.rating_count ? `(${updatedVideo.rating_count})` : '(0)';
+            }
+          }
+        } else {
+          // If we can't find the updated video, just refresh the whole list
+          fetchVideos();
+        }
+
+      } catch (error) {
+        console.error('Error submitting rating:', error);
+        alert(`Error submitting rating: ${error.message}`);
+      }
+    }
+
+    function closeVideoModal() {
+      modalEl.style.display = 'none';
+      document.body.style.overflow = '';
+
+      // Stop video playback
+      videoEl.pause();
+      videoEl.src = '';
+
+      // Destroy HLS instance if exists
+      if (currentHls) {
+        currentHls.destroy();
+        currentHls = null;
+      }
+
+      // Reset quality selection
+      currentQuality = -1;
+
+      // Hide quality dropdown if open
+      const qualityDropdown = document.getElementById('qualityDropdown');
+      if (qualityDropdown) {
+        qualityDropdown.classList.remove('show');
+      }
+    }
+
+    function playVideo(hlsPath) {
+      const hlsUrl = `${STREAM_URL}/stream?file=${encodeURIComponent(hlsPath)}`;
+
+      // Destroy previous HLS instance if exists
+      if (currentHls) {
+        currentHls.destroy();
+        currentHls = null;
+      }
+
+      // Reset quality selection
+      currentQuality = -1;
+      updateQualityButton("Auto");
+
+      if (window.Hls && Hls.isSupported()) {
+        currentHls = new Hls();
+        currentHls.loadSource(hlsUrl);
+        currentHls.attachMedia(videoEl);
+
+        currentHls.on(Hls.Events.MANIFEST_PARSED, () => {
+          // Setup quality selection
+          setupQualitySelection();
+
+          videoEl.play().catch(error => {
+            console.error('Error playing video:', error);
+          });
+        });
+      } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+        videoEl.src = hlsUrl;
+        videoEl.play().catch(error => {
+          console.error('Error playing video:', error);
+        });
+
+        // Hide quality button for native HLS (can't control quality)
+        document.getElementById('qualityButton').style.display = 'none';
+      } else {
+        alert('HLS not supported in your browser');
+      }
+    }
+
+    function setupQualitySelection() {
+      if (!currentHls) return;
+
+      const qualityButton = document.getElementById('qualityButton');
+      const qualityDropdown = document.getElementById('qualityDropdown');
+      const qualityOptions = document.querySelectorAll('.quality-option');
+
+      // Show quality button
+      qualityButton.style.display = 'flex';
+
+      // Toggle dropdown when clicking the button
+      qualityButton.onclick = function(e) {
+        e.stopPropagation();
+        qualityDropdown.classList.toggle('show');
+      };
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', function() {
+        qualityDropdown.classList.remove('show');
+      });
+
+      // Prevent clicks inside dropdown from closing it
+      qualityDropdown.addEventListener('click', function(e) {
+        e.stopPropagation();
+      });
+
+      // Handle quality selection
+      qualityOptions.forEach(option => {
+        option.addEventListener('click', function() {
+          const quality = parseInt(this.dataset.quality);
+          setQuality(quality);
+
+          // Update active class
+          qualityOptions.forEach(opt => opt.classList.remove('active'));
+          this.classList.add('active');
+
+          // Update button text
+          updateQualityButton(this.textContent);
+
+          // Close dropdown
+          qualityDropdown.classList.remove('show');
+        });
+      });
+
+      // Set initial active option
+      const autoOption = document.querySelector('.quality-option[data-quality="-1"]');
+      if (autoOption) {
+        autoOption.classList.add('active');
+      }
+    }
+
+    function setQuality(quality) {
+      if (!currentHls) return;
+
+      currentQuality = quality;
+
+      if (quality === -1) {
+        // Auto mode
+        currentHls.currentLevel = -1;
+      } else {
+        // Manual quality selection
+        currentHls.currentLevel = quality;
+      }
+    }
+
+    function updateQualityButton(text) {
+      const qualityButton = document.getElementById('qualityButton');
+      if (qualityButton) {
+        qualityButton.textContent = text;
+      }
+    }
+
+    // Close modal when clicking the close button
+    closeModalBtn.addEventListener('click', closeVideoModal);
+
+    // Close modal when clicking outside the content
+    modalEl.addEventListener('click', event => {
+      if (event.target === modalEl) {
+        closeVideoModal();
+      }
+    });
+
+    // Close modal with Escape key
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && modalEl.style.display === 'flex') {
+        closeVideoModal();
+      }
+    });
+
+    // Auto-refresh variables
+    const AUTO_REFRESH_INTERVAL = 3000; // 3 seconds
+    let autoRefreshTimer = null;
+
+    // Function to start auto-refresh
+    function startAutoRefresh() {
+      // Clear any existing timer
+      if (autoRefreshTimer) {
+        clearInterval(autoRefreshTimer);
+      }
+
+      // Set up new timer
+      autoRefreshTimer = setInterval(() => {
+        // Only refresh if the modal is not open (user isn't watching a video)
+        if (modalEl.style.display !== 'flex') {
+          fetchVideos();
+        }
+      }, AUTO_REFRESH_INTERVAL);
+    }
+
+    // Function to stop auto-refresh
+    function stopAutoRefresh() {
+      if (autoRefreshTimer) {
+        clearInterval(autoRefreshTimer);
+        autoRefreshTimer = null;
+      }
+    }
+
+    // Initialize
+    fetchVideos();
+    startAutoRefresh();
+
+    // Stop auto-refresh when the page is hidden and restart when visible again
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        stopAutoRefresh();
+      } else {
+        startAutoRefresh();
+      }
+    });
+  </script>
+</body>
+</html>

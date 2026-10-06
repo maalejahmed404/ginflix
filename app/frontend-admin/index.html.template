@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Video Uploader</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f2f4f8;
+      padding: 2rem;
+      display: flex;
+      justify-content: center;
+    }
+
+    .uploader {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 0 12px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 700px;
+    }
+
+    .drop-zone {
+      border: 2px dashed #aaa;
+      border-radius: 10px;
+      padding: 2rem;
+      text-align: center;
+      color: #555;
+      cursor: pointer;
+      margin-bottom: 2rem;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .drop-zone.dragover {
+      background: #e6f7ff;
+      border-color: #1890ff;
+    }
+
+    .previews {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .preview {
+      width: 160px;
+      background: #fafafa;
+      padding: 0.5rem;
+      border-radius: 8px;
+      box-shadow: 0 0 4px rgba(0,0,0,0.05);
+    }
+
+    .preview video {
+      width: 100%;
+      border-radius: 4px;
+    }
+
+    .upload-spinner {
+      border: 3px solid #eee;
+      border-radius: 50%;
+      border-top: 3px solid #1890ff;
+      width: 20px;
+      height: 20px;
+      animation: spin 1s linear infinite;
+      margin: 0.4rem auto 0;
+      display: none;
+    }
+
+    .status {
+      font-size: 0.85rem;
+      color: #555;
+      margin-top: 0.25rem;
+    }
+
+    button.retry {
+      background: #ff4d4f;
+      border: none;
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      color: white;
+      margin-top: 0.5rem;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+
+    .top-bar {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+    }
+
+    .login-btn {
+      padding: 0.5rem 1rem;
+      background: #1890ff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .auth-waiting {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000000;
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+
+    .auth-waiting-spinner {
+      border: 4px solid #555555;
+      border-radius: 50%;
+      border-top: 4px solid #ffffff;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin-bottom: 15px;
+    }
+
+    .auth-waiting-text {
+      color: white;
+      font-size: 18px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .video-gallery {
+      margin-top: 2rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+
+    .video-item {
+      background: #fafafa;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 0 4px rgba(0,0,0,0.1);
+      transition: transform 0.2s;
+    }
+
+    .video-item:hover {
+      transform: translateY(-3px);
+    }
+
+    .video-item video {
+      width: 100%;
+      height: 120px;
+      object-fit: cover;
+      background: #000;
+    }
+
+    .video-info {
+      padding: 0.75rem;
+    }
+
+    .video-title {
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .video-date {
+      font-size: 0.8rem;
+      color: #888;
+      margin-bottom: 0.75rem;
+    }
+
+    .delete-btn {
+      background: #ff4d4f;
+      color: white;
+      border: none;
+      padding: 0.4rem 0.75rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      width: 100%;
+      transition: background 0.2s;
+    }
+
+    .delete-btn:hover {
+      background: #ff7875;
+    }
+
+    .loading-indicator {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 2rem;
+      color: #888;
+    }
+
+    .empty-gallery {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 2rem;
+      color: #888;
+      background: #f5f5f5;
+      border-radius: 8px;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="auth-waiting" id="authWaiting">
+    <div class="auth-waiting-spinner"></div>
+    <div class="auth-waiting-text">Loading</div>
+  </div>
+
+  <div class="access-denied" id="accessDenied" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; flex-direction: column;">
+    <div style="background: white; padding: 2rem; border-radius: 8px; text-align: center; max-width: 400px;">
+      <h2 style="color: #ff4d4f; margin-top: 0;">Access Denied</h2>
+      <p style="margin-bottom: 1.5rem;">You are not authorized to access the admin interface.</p>
+      <button id="accessDeniedCloseBtn" style="padding: 0.5rem 1rem; background: #ff4d4f; color: white; border: none; border-radius: 6px; cursor: pointer;">Close</button>
+    </div>
+  </div>
+
+  <div class="top-bar">
+    <button class="login-btn" id="login">Login with Keycloak</button>
+    <button class="logout-btn" id="logout" style="display: none; padding: 0.5rem 1rem; background: #ff4d4f; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; margin-left: 10px;">Logout</button>
+    <script src="https://cdn.jsdelivr.net/npm/keycloak-js@latest/dist/keycloak.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.9/dist/hls.min.js"></script>
+    <script>
+      const keycloak = new Keycloak({
+        url: 'https://${KEYCLOAK_HOST}',
+        realm: '${KEYCLOAK_REALM}',
+        clientId: '${KEYCLOAK_CLIENT_ID}',
+      });
+
+
+    // Show waiting indicator during initialization
+    const authWaiting = document.getElementById('authWaiting');
+    authWaiting.style.display = 'flex';
+
+    keycloak.init({
+      onLoad: 'check-sso',
+      pkceMethod: 'S256',
+      silentCheckSsoRedirectUri: window.location.origin + "/silent-check-sso.html"
+    }).then(authenticated => {
+      // Hide waiting indicator after authentication check
+      authWaiting.style.display = 'none';
+
+      if (authenticated) {
+        console.log("Authenticated!");
+
+        // Check if username matches client ID
+        const username = keycloak.tokenParsed.preferred_username;
+        const clientId = '${KEYCLOAK_CLIENT_ID}';
+
+        if (username === clientId) {
+          // User is authorized - allow access
+          sessionStorage.setItem("access_token", keycloak.token);
+          updateUIBasedOnAuth(true);
+
+          // Setup token refresh interval
+          setInterval(() => {
+            keycloak.updateToken(70).then(refreshed => {
+              if (refreshed) {
+                console.log("Token refreshed");
+              }
+            }).catch(() => {
+              console.log("Failed to refresh token");
+            });
+          }, 60000);
+        } else {
+          // User is not authorized - force logout
+          console.log("Unauthorized: Username does not match client ID");
+          keycloak.logout();
+          updateUIBasedOnAuth(false);
+          // Show access denied message
+          document.getElementById("accessDenied").style.display = 'flex';
+        }
+      } else {
+        console.log("Not authenticated");
+        updateUIBasedOnAuth(false);
+      }
+    }).catch(error => {
+      // Hide waiting indicator if there's an error
+      authWaiting.style.display = 'none';
+      console.error("Authentication error:", error);
+    });
+
+    // Function to update UI elements based on authentication state
+    function updateUIBasedOnAuth(isAuthenticated) {
+      const loginBtn = document.querySelector('.login-btn');
+      const logoutBtn = document.querySelector('.logout-btn');
+      const uploader = document.querySelector('.uploader');
+
+      if (isAuthenticated) {
+        loginBtn.style.display = 'none';
+        logoutBtn.style.display = 'inline-block';
+        uploader.style.display = '';
+      } else {
+        loginBtn.style.display = 'inline-block';
+        logoutBtn.style.display = 'none';
+        uploader.style.display = 'none';
+      }
+    }
+
+    window.onload = () => {
+      document.getElementById("login").addEventListener("click", () => {
+        // Show waiting indicator when login button is clicked
+        authWaiting.style.display = 'flex';
+
+        // Keycloak will redirect to login page, but we show the indicator until then
+        keycloak.login();
+      });
+
+      document.getElementById("logout").addEventListener("click", () => {
+        // Clear session storage
+        sessionStorage.removeItem('access_token');
+
+        // Logout from Keycloak
+        keycloak.logout().then(() => {
+          // Update UI after logout
+          updateUIBasedOnAuth(false);
+        });
+      });
+
+      // Add event listener for access denied close button
+      document.getElementById("accessDeniedCloseBtn").addEventListener("click", () => {
+        document.getElementById("accessDenied").style.display = 'none';
+      });
+    };
+    </script>
+  </div>
+
+  <div class="uploader">
+    <h2>Upload Videos</h2>
+    <div class="drop-zone" id="dropZone">Drag & drop video files here</div>
+    <div class="previews" id="previewContainer"></div>
+
+    <h2>Video Gallery</h2>
+    <div class="video-gallery" id="videoGallery">
+      <div class="loading-indicator">Loading videos...</div>
+    </div>
+  </div>
+
+  <script>
+    const dropZone = document.getElementById('dropZone');
+    const previewContainer = document.getElementById('previewContainer');
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('video/'));
+      files.forEach(handleFile);
+    });
+
+    function handleFile(file) {
+      const id = crypto.randomUUID();
+      const preview = document.createElement('div');
+      preview.className = 'preview';
+      preview.innerHTML = `
+        <video src="${URL.createObjectURL(file)}" controls muted></video>
+        <div class="upload-spinner" id="spinner-${id}"></div>
+        <div class="status" id="status-${id}">Uploading...</div>
+        <button class="retry" id="retry-${id}" style="display:none;">Retry</button>
+        <button class="process-btn" id="process-${id}" style="display:none; background: #1890ff; border: none; padding: 0.25rem 0.6rem; border-radius: 4px; color: white; margin-top: 0.5rem; cursor: pointer; font-size: 0.8rem;">Process Video</button>
+      `;
+      previewContainer.appendChild(preview);
+      uploadFile(file, id);
+    }
+
+    function uploadFile(file, id) {
+      const spinner = document.getElementById(`spinner-${id}`);
+      const statusEl = document.getElementById(`status-${id}`);
+      const retryBtn = document.getElementById(`retry-${id}`);
+      const processBtn = document.getElementById(`process-${id}`);
+      retryBtn.style.display = 'none';
+      processBtn.style.display = 'none';
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Use fetch API instead of XMLHttpRequest for better CORS handling
+      const token = sessionStorage.getItem('access_token');
+
+      const uploadPromise = fetch('${BACKEND_URL}/api/video', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+        credentials: 'include', // Include cookies if any
+        mode: 'cors' // Explicitly request CORS mode
+      });
+
+      // Show spinner during upload
+      spinner.style.display = 'block';
+      statusEl.textContent = 'Uploading...';
+
+      uploadPromise
+        .then(response => {
+          if (response.ok) {
+            spinner.style.display = 'none';
+            statusEl.textContent = '✅ Uploaded - Starting Processing...';
+            return response.json();
+          } else {
+            throw new Error(`Upload failed with status: ${response.status}`);
+          }
+        })
+        .then(data => {
+          // Store the video ID for processing
+          processBtn.dataset.videoId = data.id;
+
+          // Add event listener for process button (in case manual processing is needed)
+          processBtn.onclick = () => {
+            processVideo(data.id, id);
+          };
+
+          // Start checking status immediately after upload
+          statusEl.textContent = '✅ Uploaded - Checking processing status...';
+          checkVideoStatus(data.id, id);
+        })
+        .catch(error => {
+          console.error('Upload error:', error);
+          spinner.style.display = 'none';
+          statusEl.textContent = '❌ ' + (error.message || 'Network error');
+          retryBtn.style.display = 'inline-block';
+        });
+
+      retryBtn.onclick = () => {
+        statusEl.textContent = 'Retrying...';
+        spinner.style.display = 'block';
+        retryBtn.style.display = 'none';
+        processBtn.style.display = 'none';
+        uploadFile(file, id);
+      };
+    }
+
+    function checkVideoStatus(videoId, previewId) {
+      const spinner = document.getElementById(`spinner-${previewId}`);
+      const statusEl = document.getElementById(`status-${previewId}`);
+      const processBtn = document.getElementById(`process-${previewId}`);
+
+      // Show spinner during status check
+      spinner.style.display = 'block';
+
+      fetch(`${BACKEND_URL}/api/video/status?id=${videoId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        mode: 'cors'
+      })
+      .then(response => {
+        if (response.ok) {
+          return response.json();
+        } else {
+          throw new Error(`Status check failed with status: ${response.status}`);
+        }
+      })
+      .then(data => {
+        // Update UI based on processing status
+        switch(data.status) {
+          case 'uploaded':
+            statusEl.textContent = 'Uploaded - Waiting for processing...';
+            // Check again in 2 seconds
+            setTimeout(() => checkVideoStatus(videoId, previewId), 2000);
+            break;
+          case 'processing':
+            statusEl.textContent = 'Processing with ffmpeg...';
+            // Check again in 2 seconds
+            setTimeout(() => checkVideoStatus(videoId, previewId), 2000);
+            break;
+          case 'completed':
+            spinner.style.display = 'none';
+            statusEl.textContent = '✅ Processing Complete';
+            // Refresh video gallery after successful processing
+            setTimeout(loadVideos, 1000);
+            break;
+          case 'error':
+            spinner.style.display = 'none';
+            statusEl.textContent = '❌ Processing Error: ' + (data.error || 'Unknown error');
+            processBtn.style.display = 'inline-block';
+            break;
+          default:
+            spinner.style.display = 'none';
+            statusEl.textContent = 'Unknown status: ' + data.status;
+            processBtn.style.display = 'inline-block';
+        }
+      })
+      .catch(error => {
+        console.error('Status check error:', error);
+        spinner.style.display = 'none';
+        statusEl.textContent = '❌ Status Check Error: ' + (error.message || 'Network error');
+        processBtn.style.display = 'inline-block';
+      });
+    }
+
+    function processVideo(videoId, previewId) {
+      const spinner = document.getElementById(`spinner-${previewId}`);
+      const statusEl = document.getElementById(`status-${previewId}`);
+      const processBtn = document.getElementById(`process-${previewId}`);
+
+      // Show spinner during processing
+      spinner.style.display = 'block';
+      statusEl.textContent = 'Starting processing...';
+      processBtn.style.display = 'none';
+
+      const token = sessionStorage.getItem('access_token');
+
+      fetch('${BACKEND_URL}/api/video/process', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+        body: JSON.stringify({ video_id: videoId }),
+        credentials: 'include',
+        mode: 'cors'
+      })
+      .then(response => {
+        if (response.ok) {
+          // Start checking status
+          checkVideoStatus(videoId, previewId);
+          return response.json();
+        } else {
+          throw new Error(`Processing failed with status: ${response.status}`);
+        }
+      })
+      .catch(error => {
+        console.error('Processing error:', error);
+        spinner.style.display = 'none';
+        statusEl.textContent = '❌ Processing Error: ' + (error.message || 'Network error');
+        processBtn.style.display = 'inline-block';
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      // Check authentication status on page load
+      const isAuthenticated = !!sessionStorage.getItem('access_token') && !!keycloak.token;
+
+      // Additional authorization check - verify username matches client ID
+      if (isAuthenticated && keycloak.tokenParsed) {
+        const username = keycloak.tokenParsed.preferred_username;
+        const clientId = '${KEYCLOAK_CLIENT_ID}';
+
+        if (username === clientId) {
+          // User is authorized
+          updateUIBasedOnAuth(true);
+          loadVideos();
+        } else {
+          // User is not authorized - force logout
+          console.log("Unauthorized: Username does not match client ID");
+          sessionStorage.removeItem('access_token');
+          keycloak.logout();
+          updateUIBasedOnAuth(false);
+          // Show access denied message
+          document.getElementById("accessDenied").style.display = 'flex';
+        }
+      } else {
+        updateUIBasedOnAuth(false);
+      }
+    });
+
+    // No thumbnail queue needed anymore as thumbnails are generated server-side
+
+    // Function to display a thumbnail from the server
+    function displayThumbnail(thumbnailUrl, videoElement) {
+      if (!thumbnailUrl) {
+        console.warn('No thumbnail URL provided');
+        return;
+      }
+
+      const thumbnailContainer = videoElement.querySelector('.video-container');
+      if (!thumbnailContainer) {
+        console.warn('Thumbnail container not found');
+        return;
+      }
+
+      // Create an image element for the thumbnail
+      const thumbnail = document.createElement('img');
+      thumbnail.style.width = '100%';
+      thumbnail.style.height = '100%';
+      thumbnail.style.objectFit = 'cover';
+      thumbnail.alt = 'Video thumbnail';
+      thumbnail.src = `${STREAM_URL}/stream?file=${encodeURIComponent(thumbnailUrl)}`;
+
+      // Replace the loading placeholder with the thumbnail
+      thumbnailContainer.innerHTML = '';
+      thumbnailContainer.appendChild(thumbnail);
+    }
+
+    // Function to load videos from the backend
+    function loadVideos() {
+      const videoGallery = document.getElementById('videoGallery');
+      const token = sessionStorage.getItem('access_token');
+
+      fetch('${BACKEND_URL}/api/videos', {
+        method: 'GET',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+        credentials: 'include',
+        mode: 'cors'
+      })
+      .then(response => {
+        if (response.ok) {
+          return response.json();
+        } else {
+          throw new Error(`Failed to fetch videos: ${response.status}`);
+        }
+      })
+      .then(videos => {
+        // Clear loading indicator
+        videoGallery.innerHTML = '';
+
+        if (videos.length === 0) {
+          videoGallery.innerHTML = '<div class="empty-gallery">No videos available</div>';
+          return;
+        }
+
+        // Sort videos by creation date (newest first)
+        videos.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+        // Create video items
+        videos.forEach(video => {
+          const videoItem = document.createElement('div');
+          videoItem.className = 'video-item';
+
+          // Format date
+          const createdDate = new Date(video.created_at);
+          const formattedDate = createdDate.toLocaleDateString() + ' ' + 
+                               createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+          videoItem.innerHTML = `
+            <div class="video-container">
+              <div style="width: 100%; height: 120px; background: #000; display: flex; justify-content: center; align-items: center; color: #666;">
+                Loading...
+              </div>
+            </div>
+            <div class="video-info">
+              <div class="video-title">${video.title}</div>
+              <div class="video-date">${formattedDate}</div>
+              <button class="delete-btn" data-id="${video.id}">Delete Video</button>
+            </div>
+          `;
+
+          videoGallery.appendChild(videoItem);
+
+          // Display thumbnail for this video
+          displayThumbnail(video.thumbnail_url, videoItem);
+
+          // Add event listener to delete button
+          const deleteBtn = videoItem.querySelector('.delete-btn');
+          deleteBtn.addEventListener('click', () => deleteVideo(video.id, videoItem));
+        });
+      })
+      .catch(error => {
+        console.error('Error loading videos:', error);
+        videoGallery.innerHTML = `<div class="empty-gallery">Error loading videos: ${error.message}</div>`;
+      });
+    }
+
+    // Function to delete a video
+    function deleteVideo(videoId, videoElement) {
+      if (!confirm('Are you sure you want to delete this video?')) {
+        return;
+      }
+
+      const token = sessionStorage.getItem('access_token');
+
+      // Show loading state
+      const deleteBtn = videoElement.querySelector('.delete-btn');
+      const originalText = deleteBtn.textContent;
+      deleteBtn.textContent = 'Deleting...';
+      deleteBtn.disabled = true;
+
+      fetch(`${BACKEND_URL}/api/video/delete?id=${videoId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+        credentials: 'include',
+        mode: 'cors'
+      })
+      .then(response => {
+        if (response.ok) {
+          // Remove the video element from the gallery
+          videoElement.remove();
+
+          // Check if gallery is empty
+          const videoGallery = document.getElementById('videoGallery');
+          if (videoGallery.children.length === 0) {
+            videoGallery.innerHTML = '<div class="empty-gallery">No videos available</div>';
+          }
+
+          return response.json();
+        } else {
+          throw new Error(`Failed to delete video: ${response.status}`);
+        }
+      })
+      .catch(error => {
+        console.error('Error deleting video:', error);
+        alert(`Error deleting video: ${error.message}`);
+
+        // Reset button
+        deleteBtn.textContent = originalText;
+        deleteBtn.disabled = false;
+      });
+    }
+
+    // Update UI when authentication state changes
+    const originalUpdateUIBasedOnAuth = updateUIBasedOnAuth;
+    updateUIBasedOnAuth = function(isAuthenticated) {
+      originalUpdateUIBasedOnAuth(isAuthenticated);
+      if (isAuthenticated) {
+        loadVideos();
+      }
+    };
+
+  </script>
+</body>
+</html>
