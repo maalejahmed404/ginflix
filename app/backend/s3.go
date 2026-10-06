@@ -34,7 +34,7 @@ func uploadHLSToS3(dir string, baseName string) (string, error) {
 
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
-		Secure: true,
+		Secure: os.Getenv("GARAGE_USE_SSL") != "false",
 	})
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to initialize S3 client")
@@ -126,7 +126,7 @@ func uploadThumbnailToS3(thumbnailPath, baseName string) (string, error) {
 
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
-		Secure: true,
+		Secure: os.Getenv("GARAGE_USE_SSL") != "false",
 	})
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to initialize S3 client")
@@ -191,7 +191,7 @@ func deleteFromS3(hlsURL string) error {
 
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
-		Secure: true,
+		Secure: os.Getenv("GARAGE_USE_SSL") != "false",
 	})
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to initialize S3 client")

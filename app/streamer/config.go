@@ -27,7 +27,7 @@ func LoadConfig() *Config {
 		Endpoint:  mustGetEnv("GARAGE_ENDPOINT"),
 		AccessKey: mustGetEnv("GARAGE_ACCESS_KEY"),
 		SecretKey: mustGetEnv("GARAGE_SECRET_KEY"),
-		UseSSL:    true,
+		UseSSL:    os.Getenv("GARAGE_USE_SSL") != "false",
 	}
 
 	logger.Debug().

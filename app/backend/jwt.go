@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -109,7 +110,11 @@ func getJWKS() (*JWKS, error) {
 	if cachedJWKS != nil && time.Since(lastJWKSFetch) < 5*time.Minute {
 		return cachedJWKS, nil
 	}
-	resp, err := http.Get(keycloakJwksURL)
+	jwksURL := keycloakJwksURL
+	if v := os.Getenv("KEYCLOAK_JWKS_URL"); v != "" {
+		jwksURL = v
+	}
+	resp, err := http.Get(jwksURL)
 	if err != nil {
 		return nil, err
 	}
