@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+  namespace: ginflix
+  labels:
+    app: frontend
+data:
+  # These URLs are used by the browser, not by the pod, so they must be
+  # the public address (the reverse proxy), not a cluster service name.
+  BACKEND_URL: "http://ginflix.localhost:8088"
+  STREAM_URL: "http://ginflix.localhost:8088"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: ginflix
+  labels:
+    app: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: frontend
+          image: ginflix/frontend
+          ports:
+            - name: http
+              containerPort: 80
+          envFrom:
+            - configMapRef:
+                name: frontend-config
+          # The image is nginx:alpine: it starts as root, listens on 80 and
+          # its entrypoint writes index.html at startup. So no runAsNonRoot
+          # and no read-only filesystem here (see "Limitations" in the README).
+          securityContext:
+            allowPrivilegeEscalation: false
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: ginflix
+  labels:
+    app: frontend
+spec:
+  # fixed nodePort because the reverse proxy config points to it
+  type: NodePort
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      nodePort: 30000

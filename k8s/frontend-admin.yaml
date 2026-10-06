@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-admin-config
+  namespace: ginflix
+  labels:
+    app: frontend-admin
+data:
+  # used by the browser, so these are the public addresses (reverse proxy)
+  BACKEND_URL: "http://ginflix.localhost:8088"
+  STREAM_URL: "http://ginflix.localhost:8088"
+  KEYCLOAK_URL: "http://auth.ginflix.localhost:8088"
+  KEYCLOAK_REALM: "ginflix"
+  KEYCLOAK_CLIENT_ID: "ginflix"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-admin
+  namespace: ginflix
+  labels:
+    app: frontend-admin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend-admin
+  template:
+    metadata:
+      labels:
+        app: frontend-admin
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: frontend-admin
+          image: ginflix/frontend-admin
+          ports:
+            - name: http
+              containerPort: 80
+          envFrom:
+            - configMapRef:
+                name: frontend-admin-config
+          # same image base as the frontend (nginx:alpine, root, port 80)
+          securityContext:
+            allowPrivilegeEscalation: false
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-admin
+  namespace: ginflix
+  labels:
+    app: frontend-admin
+spec:
+  # fixed nodePort because the reverse proxy config points to it
+  type: NodePort
+  selector:
+    app: frontend-admin
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      nodePort: 30001
