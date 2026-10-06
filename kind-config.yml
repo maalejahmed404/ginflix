@@ -1,0 +1,13 @@
+# 1 control plane + 2 workers, so that replicas can be spread on
+# different nodes.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker
+networking:
+  # The default CNI of kind (kindnet) does not enforce NetworkPolicy on
+  # every machine (on Docker Desktop / WSL2 the policies were silently
+  # ignored). So it is disabled and Calico is installed by "make cluster".
+  disableDefaultCNI: true
