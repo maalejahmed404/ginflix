@@ -1,0 +1,74 @@
+# Starting 3 mongod with --replSet is not enough: somebody has to run
+# rs.initiate() once. This Job does it.
+# It is safe to run again: if the replica set already exists it does nothing.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mongo-init
+  namespace: ginflix
+  labels:
+    app: mongo-init
+spec:
+  backoffLimit: 4
+  # the job waits for the 3 members, which can be long the first time
+  # (image download). After 30 minutes it gives up.
+  activeDeadlineSeconds: 1800
+  template:
+    metadata:
+      labels:
+        app: mongo-init
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+      containers:
+        - name: mongo-init
+          image: mongo:6.0.14
+          env:
+            # mongosh wants a writable home directory
+            - name: HOME
+              value: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+          command: ["bash", "-c"]
+          args:
+            - |
+              set -e
+
+              # rs.initiate() fails if one member is not reachable,
+              # so wait for the three of them first
+              for host in mongodb-0.mongodb mongodb-1.mongodb mongodb-2.mongodb; do
+                echo "waiting for $host ..."
+                until mongosh --host "$host" --quiet --eval 'db.adminCommand("ping")' > /dev/null 2>&1; do
+                  sleep 3
+                done
+              done
+
+              mongosh --host mongodb-0.mongodb --quiet --eval '
+                try {
+                  rs.status();
+                  print("replica set already initiated, nothing to do");
+                } catch (e) {
+                  rs.initiate({
+                    _id: "rs0",
+                    members: [
+                      { _id: 0, host: "mongodb-0.mongodb:27017" },
+                      { _id: 1, host: "mongodb-1.mongodb:27017" },
+                      { _id: 2, host: "mongodb-2.mongodb:27017" }
+                    ]
+                  });
+                  print("replica set initiated");
+                }
+              '
