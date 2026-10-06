@@ -1,0 +1,112 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: streamer-config
+  namespace: ginflix
+  labels:
+    app: streamer
+data:
+  GARAGE_ENDPOINT: "seaweedfs:8333"
+  GARAGE_BUCKET: "ginflix"
+  GARAGE_USE_SSL: "false"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: streamer
+  namespace: ginflix
+  labels:
+    app: streamer
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: streamer
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: streamer
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: streamer
+          image: ginflix/streamer
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: streamer-config
+            - secretRef:
+                name: s3-credentials
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          # the streamer only has the /stream route, so a TCP check is enough
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: streamer
+  namespace: ginflix
+  labels:
+    app: streamer
+spec:
+  # fixed nodePort because the reverse proxy config points to it
+  type: NodePort
+  selector:
+    app: streamer
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      nodePort: 30081
+---
+# The streamer is stateless, so it is the one that can scale.
+# Needs metrics-server (make metrics-server).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: streamer
+  namespace: ginflix
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: streamer
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
