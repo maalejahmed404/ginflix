@@ -26,30 +26,7 @@ repository. See [Credits](#credits-and-license).
 
 ## Architecture
 
-```
-  browser
-     |   http://ginflix.localhost:8088          public site + /api + /stream
-     |   http://admin.ginflix.localhost:8088    admin site
-     |   http://auth.ginflix.localhost:8088     login page (Keycloak)
-     v
-  Caddy reverse proxy (docker, on the "kind" network)
-     |
-     |  NodePort services
-     v
- +---------------------- kind cluster, namespace "ginflix" ----------------------+
- |                                                                               |
- |  frontend x2     frontend-admin x1     keycloak x1                            |
- |                                           ^                                   |
- |                                           | public keys (JWKS)                |
- |  backend x1  -----------------------------+                                   |
- |     |    \                                                                    |
- |     |     +-------> seaweedfs x1 (S3) <------ streamer x2 (+ HPA)             |
- |     v                    |                                                    |
- |  mongodb x3 (rs0)       PVC                                                   |
- |     |                                                                         |
- |  3 PVC                                                                        |
- +-------------------------------------------------------------------------------+
-```
+![Architecture of Ginflix on the kind cluster](docs/architecture.svg)
 
 | Component | Kubernetes objects | Role |
 |---|---|---|
