@@ -1,24 +1,22 @@
-# Use a minimal Go image
-FROM golang:1.24.2-alpine
+# build stage
+FROM golang:1.24.2-alpine AS builder
 
-# Set working directory
 WORKDIR /app
 
-# Install ffmpeg
-RUN apk add --no-cache ffmpeg
-
-# Copy Go modules first for caching
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy the source code
 COPY . .
-
-# Build the app
 RUN go build -o app .
 
-# Expose port
+# final image: only the binary and ffmpeg
+FROM alpine:3.21
+
+RUN apk add --no-cache ffmpeg
+
+WORKDIR /app
+COPY --from=builder /app/app .
+
 EXPOSE 8080
 
-# Run the app
 CMD ["./app"]
